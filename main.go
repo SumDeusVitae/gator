@@ -1,25 +1,43 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
 
+	_ "github.com/lib/pq"
+
 	"github.com/SumDeusVitae/gator/internal/config"
+	"github.com/SumDeusVitae/gator/internal/database"
 )
 
 type state struct {
 	Config *config.Config
+	db     *database.Queries
 }
 
 func main() {
+
+	// Load config
 	cfg, err := config.Read()
 	if err != nil {
-		fmt.Println("Error:", err)
-		return
+		log.Fatal("Error reading config:", err)
 	}
 
-	currentState := &state{Config: &cfg}
+	// Loading DB
+	db, err := sql.Open("postgres", cfg.DbURL)
+	if err != nil {
+		log.Fatal("Error opening database connection:", err)
+	}
+	defer db.Close() // Don't forget to close the connection when you're done
+
+	dbQueries := database.New(db)
+
+	currentState := &state{
+		Config: &cfg,
+		db:     dbQueries,
+	}
 
 	currentCommands := commands{
 		Handlers: make(map[string]func(*state, command) error),
@@ -28,6 +46,9 @@ func main() {
 	// command handlers
 	currentCommands.register("login", handlerLogin)
 	currentCommands.register("read", handlerReadConfig)
+	currentCommands.register("register", handlerRegister)
+	currentCommands.register("reset", handlerReset)
+	currentCommands.register("users", handleUsers)
 
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: cli <command> [args...]")

@@ -14,6 +14,32 @@ type Config struct {
 
 const configFileName = ".gatorconfig.json"
 
+func (c *Config) SetDbURL(url string) error {
+	c.DbURL = url
+	return write(*c)
+}
+
+func write(cfg Config) error {
+	fullPath, err := getConfigFilePath()
+	if err != nil {
+		return err
+	}
+
+	file, err := os.Create(fullPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	err = encoder.Encode(cfg)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func getConfigFilePath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -46,21 +72,5 @@ func Read() (Config, error) {
 
 func (c *Config) SetUser(newUserName string) error {
 	c.CurrentUserName = newUserName
-
-	configPath, err := getConfigFilePath()
-	if err != nil {
-		return err
-	}
-
-	file, err := os.OpenFile(configPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		return fmt.Errorf("could not open config file for writing: %v", err)
-	}
-	defer file.Close()
-
-	if err := json.NewEncoder(file).Encode(c); err != nil {
-		return fmt.Errorf("could not encode config to file: %v", err)
-	}
-
-	return nil
+	return write(*c)
 }
