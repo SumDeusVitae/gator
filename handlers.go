@@ -120,28 +120,12 @@ func handlerReadConfig(s *state, cmd command) error {
 	return nil
 }
 
-func handlerAddFeed(s *state, cmd command) error {
+func handlerAddFeed(s *state, cmd command, user database.User) error {
 	if len(cmd.Args) != 2 {
-		return fmt.Errorf("usage: %s <name>", cmd.Name)
+		return fmt.Errorf("usage: %s <name> <URL>", cmd.Name)
 	}
 	feedName := cmd.Args[0]
 	feedURL := cmd.Args[1]
-
-	// data, err := fetchFeed(context.Background(), feedURL)
-	// if err != nil {
-	// 	return fmt.Errorf("Failed to get data from handler: %v", err)
-	// }
-
-	// Read cfg
-	cfg, err := config.Read()
-	if err != nil {
-		return fmt.Errorf("error reading config: %v", err)
-	}
-	user, err := s.db.GetUser(context.Background(), cfg.CurrentUserName)
-	if err != nil {
-		return fmt.Errorf("couldn't find user: %w", err)
-	}
-
 	// Create feed
 	feed, err := s.db.CreateFeed(context.Background(), database.CreateFeedParams{
 		ID:        uuid.New(),
@@ -150,6 +134,21 @@ func handlerAddFeed(s *state, cmd command) error {
 		Name:      feedName,
 		Url:       feedURL,
 		UserID:    user.ID,
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "unique constraint") {
+			fmt.Println("User with that name already exists")
+			os.Exit(1)
+		}
+		return fmt.Errorf("error creating user: %w", err)
+	}
+	// Create feed follow record
+	_, err = s.db.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+		UserID:    user.ID,
+		FeedID:    feed.ID,
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "unique constraint") {
@@ -196,4 +195,78 @@ func printFeed(feed database.Feed, user database.User) {
 	fmt.Printf("* Name:          %s\n", feed.Name)
 	fmt.Printf("* URL:           %s\n", feed.Url)
 	fmt.Printf("* User:          %s\n", user.Name)
+}
+
+func handlerFollow(s *state, cmd command, user database.User) error {
+	if len(cmd.Args) != 1 {
+		return fmt.Errorf("usage: %s <url>", cmd.Name)
+	}
+	feedURL := cmd.Args[0]
+	// get feed information
+	feed, err := s.db.GetFeed(context.Background(), feedURL)
+	if err != nil {
+		return fmt.Errorf("Error getting feed: %v\n", err)
+	}
+	// Create feed_follow
+	feed_follow, err := s.db.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+		UserID:    user.ID,
+		FeedID:    feed.ID,
+	})
+	if err != nil {
+		fmt.Printf("Error creating feed follow: %v\n", err)
+		return err
+	}
+	// fmt.Println("Successfully following feed")
+	fmt.Printf("Following feed: %v\n", feed_follow.FeedName)
+
+	return nil
+}
+
+func handlerFollowing(s *state, cmd command, user database.User) error {
+	feeds, err := s.db.GetFeedFollowsForUser(context.Background(), user.ID)
+	if err != nil {
+		return fmt.Errorf("Couldn't get feeds")
+	}
+	fmt.Println("Currently following feeds: ")
+	for _, feed := range feeds {
+		fmt.Printf("   - %v\n", feed.FeedName)
+	}
+
+	return nil
+}
+
+func handlerUnfollow(s *state, cmd command, user database.User) error {
+	if len(cmd.Args) != 1 {
+		return fmt.Errorf("usage: %s <name>", cmd.Name)
+	}
+	feedURL := cmd.Args[0]
+
+	params := database.UnfollowParams{
+		UserID: user.ID,
+		Url:    feedURL,
+	}
+	err := s.db.Unfollow(context.Background(), params)
+	if err != nil {
+		return fmt.Errorf("Couldn't unfollow: %w", err)
+	}
+
+	return nil
+}
+
+func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command) error {
+	return func(s *state, cmd command) error {
+		cfg, err := config.Read()
+		if err != nil {
+			return fmt.Errorf("error reading config: %v", err)
+		}
+		// get current user information
+		user, err := s.db.GetUser(context.Background(), cfg.CurrentUserName)
+		if err != nil {
+			return fmt.Errorf("couldn't find user: %w", err)
+		}
+		return handler(s, cmd, user)
+	}
 }
