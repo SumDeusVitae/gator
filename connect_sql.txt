@@ -1,1 +1,7 @@
 psql postgres://postgres:postgres@localhost:5432/gator
+
+command for goose:
+goose -dir sql/schema postgres "postgres://postgres:postgres@localhost:5432/gator?sslmode=disable" up
+
+sql command:
+sqlc generate
