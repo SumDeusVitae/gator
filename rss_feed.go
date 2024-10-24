@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/xml"
-	"fmt"
 	"html"
 	"io"
 	"net/http"
@@ -27,41 +26,31 @@ type RSSItem struct {
 }
 
 func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
+	httpClient := http.Client{
+		Timeout: 10 * time.Second,
+	}
 	req, err := http.NewRequestWithContext(ctx, "GET", feedURL, nil)
 	if err != nil {
-		fmt.Println("Failed to make reqeust")
-		return &RSSFeed{}, err
+		return nil, err
 	}
 
-	// ...
-	client := &http.Client{
-		Timeout: time.Second * 5,
+	req.Header.Set("User-Agent", "gator")
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
 	}
-	req.Header.Add("User-Agent", "gator")
 
-	resp, err := client.Do(req)
+	dat, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println("Failed to get response")
-		return &RSSFeed{}, err
+		return nil, err
 	}
-	// Checking response status
-	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("Unexpected response status: %v\n", resp.StatusCode)
-		return &RSSFeed{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Println("Failed to read response")
-		return &RSSFeed{}, err
-	}
-	defer resp.Body.Close()
 
-	rssFeed := RSSFeed{}
-	err = xml.Unmarshal(data, &rssFeed)
+	var rssFeed RSSFeed
+	err = xml.Unmarshal(dat, &rssFeed)
 	if err != nil {
-		fmt.Println("Failed to unmarshall xml")
-		return &RSSFeed{}, err
+		return nil, err
 	}
+
 	rssFeed.Channel.Title = html.UnescapeString(rssFeed.Channel.Title)
 	rssFeed.Channel.Description = html.UnescapeString(rssFeed.Channel.Description)
 	for i, item := range rssFeed.Channel.Item {
@@ -69,5 +58,6 @@ func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
 		item.Description = html.UnescapeString(item.Description)
 		rssFeed.Channel.Item[i] = item
 	}
+
 	return &rssFeed, nil
 }
