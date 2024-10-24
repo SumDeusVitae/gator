@@ -1,60 +1,55 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
 	"os"
 
-	_ "github.com/lib/pq"
-
 	"github.com/SumDeusVitae/gator/internal/config"
 	"github.com/SumDeusVitae/gator/internal/database"
+	_ "github.com/lib/pq"
 )
 
 type state struct {
-	Config *config.Config
-	db     *database.Queries
+	db  *database.Queries
+	cfg *config.Config
 }
 
 func main() {
-
-	// Load config
 	cfg, err := config.Read()
 	if err != nil {
-		log.Fatal("Error reading config:", err)
+		log.Fatalf("error reading config: %v", err)
 	}
 
-	// Loading DB
-	db, err := sql.Open("postgres", cfg.DbURL)
+	db, err := sql.Open("postgres", cfg.DBURL)
 	if err != nil {
-		log.Fatal("Error opening database connection:", err)
+		log.Fatalf("error connecting to db: %v", err)
 	}
-	defer db.Close() // Don't forget to close the connection when you're done
-
+	defer db.Close()
 	dbQueries := database.New(db)
 
-	currentState := &state{
-		Config: &cfg,
-		db:     dbQueries,
+	programState := &state{
+		db:  dbQueries,
+		cfg: &cfg,
 	}
 
-	currentCommands := commands{
-		Handlers: make(map[string]func(*state, command) error),
+	cmds := commands{
+		registeredCommands: make(map[string]func(*state, command) error),
 	}
 
-	// command handlers
-	currentCommands.register("login", handlerLogin)
-	currentCommands.register("read", handlerReadConfig)
-	currentCommands.register("register", handlerRegister)
-	currentCommands.register("reset", handlerReset)
-	currentCommands.register("users", handlerUsers)
-	currentCommands.register("agg", handlerAgg)
-	currentCommands.register("addfeed", middlewareLoggedIn(handlerAddFeed))
-	currentCommands.register("feeds", handlerAllFeeds)
-	currentCommands.register("follow", middlewareLoggedIn(handlerFollow))
-	currentCommands.register("following", middlewareLoggedIn(handlerFollowing))
-	currentCommands.register("unfollow", middlewareLoggedIn(handlerUnfollow))
+	cmds.register("register", handlerRegister)
+	cmds.register("login", handlerLogin)
+	cmds.register("reset", handlerReset)
+	cmds.register("users", handlerListUsers)
+	cmds.register("agg", handlerAgg)
+	cmds.register("addfeed", middlewareLoggedIn(handlerAddFeed))
+	cmds.register("feeds", handlerListFeeds)
+	cmds.register("follow", middlewareLoggedIn(handlerFollow))
+	cmds.register("following", middlewareLoggedIn(handlerListFeedFollows))
+	cmds.register("unfollow", middlewareLoggedIn(handlerUnfollow))
+	cmds.register("browse", middlewareLoggedIn(handlerBrowse))
 
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: cli <command> [args...]")
@@ -64,9 +59,19 @@ func main() {
 	cmdName := os.Args[1]
 	cmdArgs := os.Args[2:]
 
-	err = currentCommands.run(currentState, command{Name: cmdName, Args: cmdArgs})
+	err = cmds.run(programState, command{Name: cmdName, Args: cmdArgs})
 	if err != nil {
 		log.Fatal(err)
 	}
+}
 
+func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command) error {
+	return func(s *state, cmd command) error {
+		user, err := s.db.GetUser(context.Background(), s.cfg.CurrentUserName)
+		if err != nil {
+			return err
+		}
+
+		return handler(s, cmd, user)
+	}
 }
