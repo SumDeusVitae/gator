@@ -55,13 +55,13 @@ The Gator CLI supports the following commands:
 - `login`: Authenticate an existing user.
 - `reset`: Reset the password for a user.
 - `users`: List all registered users.
-- `agg`: Perform data aggregation tasks.
 - `addfeed`: Add a new feed (requires login).
 - `feeds`: List all available feeds.
 - `follow`: Follow a specific feed (requires login).
 - `following`: List all feeds you are currently following (requires login).
 - `unfollow`: Unfollow a specific feed (requires login).
 - `browse`: Browse available feeds (requires login).
+- `agg`: Perform data aggregation tasks concurrently with go routine.
 
 
 Exanmple of usage:
