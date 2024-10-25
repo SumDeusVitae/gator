@@ -1,6 +1,6 @@
 ## Gator CLI
 
-Welcome to the Gator CLI! This command-line interface is designed to streamline your workflow with a focus on simplicity and efficiency. 
+This is a CLI in GO that uses production-ready database tools like PostgreSQL, SQLc, Goose, and psql. This is not just another CLI utility, but a service that has a long-running service worker that reaches out over the internet to fetch data from remote locations.
 
 ### Prerequisites
 
