@@ -26,9 +26,13 @@ func handlerAgg(s *state, cmd command) error {
 
 	ticker := time.NewTicker(timeBetweenRequests)
 
-	for ; ; <-ticker.C {
-		scrapeFeeds(s)
-	}
+	go func() {
+		for ; ; <-ticker.C {
+			scrapeFeeds(s)
+		}
+	}()
+
+	return nil
 }
 
 func scrapeFeeds(s *state) {
