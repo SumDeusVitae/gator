@@ -1,5 +1,3 @@
-# README.md
-
 ## Gator CLI
 
 Welcome to the Gator CLI! This command-line interface is designed to streamline your workflow with a focus on simplicity and efficiency. 
